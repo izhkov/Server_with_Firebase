@@ -13,7 +13,7 @@ export const PostItem = ({
   const [changeValue, setChangeValue] = useState(title)
   const [changeChecked, setChangeChecked] = useState(false)
 
-  const editPost = (id) => {
+  const editPost = () => {
     setIsEdit((prevState) => !prevState)
   }
 
@@ -31,7 +31,6 @@ export const PostItem = ({
   return (
     <div className="postItem">
       <div className="container">
-        {id}.{' '}
         {isEdit ? (
           <input type="text" value={changeValue} onChange={editTask} />
         ) : (
@@ -54,7 +53,7 @@ export const PostItem = ({
               Подтвердить
             </button>
           ) : (
-            <button className="editTask" onClick={() => editPost(id)}>
+            <button className="editTask" onClick={() => editPost()}>
               Редактировать задачу
             </button>
           )}

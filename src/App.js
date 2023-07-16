@@ -1,131 +1,74 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import { PostItem } from './PostItem'
-import { useDebounce } from './useDebounce'
+import { ref, onValue, push, update, remove } from 'firebase/database'
+import { db } from './firebase'
 
 function App() {
-  const [data, setData] = useState([])
+  const [data, setData] = useState({})
   const [task, setTask] = useState({ title: '', completed: false })
-  const [searchQuery, setSearchQuery] = useState('')
-  const [sortTask, setSortTask] = useState(false)
-  const valueSearch = useDebounce(searchQuery)
 
-  const handleSearchQuery = ({ target }) => {
-    setSearchQuery(target.value)
-  }
   useEffect(() => {
-    fetch(`http://localhost:3004/tasks/?q=${valueSearch}`)
-      .then((response) => response.json())
-      .then((data) => {
-        setData(data)
-      })
-  }, [valueSearch])
+    const tasksDbRef = ref(db, `tasks`)
 
-  const createTask = async (payload) => {
-    const response = await fetch('http://localhost:3004/tasks', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+    return onValue(tasksDbRef, (snapshot) => {
+      const loadedTasks = snapshot.val() || {}
+      setData(loadedTasks)
     })
-    const post = await response.json()
-    setData((prevState) => [...prevState, post])
+  }, [])
+
+  let keys = Object.keys(data)
+
+  const createTask = (payload) => {
+    const tasksDbRef = ref(db, 'tasks')
+
+    push(tasksDbRef, payload)
+
+    setTask(() => [payload])
+    setTask({ title: '' })
+  }
+
+  const updateTask = (id, changeValue) => {
+    const updateDbRef = ref(db, `tasks/${id}`)
+
+    update(updateDbRef, { title: changeValue })
+
+    setTask(() => changeValue)
     setTask({ title: '', completed: false })
   }
 
-  const removeTask = async (id) => {
-    await fetch(`http://localhost:3004/tasks/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-    setData(data.filter((task) => task.id !== id))
+  const updateChecked = (id, changeChecked) => {
+    const updateDbRef = ref(db, `tasks/${id}`)
+
+    update(updateDbRef, { completed: changeChecked })
+
+    setTask(() => changeChecked)
+    setTask({ ...task, completed: changeChecked })
   }
 
-  const updateTask = async (id, changeValue) => {
-    const taskItemIndex = data.findIndex((task) => task.id === id)
-    const taskItem = data.find((task) => task.id === id)
-    if (taskItemIndex !== -1) {
-      const response = await fetch(`http://localhost:3004/tasks/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ ...taskItem, title: changeValue }),
-      })
-      const updatedTask = await response.json()
-      const copyData = data.slice()
-      copyData[taskItemIndex] = updatedTask
-      setData(copyData)
-    }
-  }
+  const removeTask = (id) => {
+    const removeDbRef = ref(db, `tasks/${id}`)
 
-  const updateChecked = async (id, changeChecked) => {
-    const taskItemIndex = data.findIndex((task) => task.id === id)
-    const taskItem = data.find((task) => task.id === id)
-    if (taskItemIndex !== -1) {
-      const response = await fetch(`http://localhost:3004/tasks/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ ...taskItem, completed: changeChecked }),
-      })
-      const updatedTask = await response.json()
-      const copyData = data.slice()
-      copyData[taskItemIndex] = updatedTask
-      setData(copyData)
-    }
-  }
-
-  const taskSort = () => {
-    setSortTask((prevState) => !prevState)
-    if (!sortTask) {
-      fetch(`http://localhost:3004/tasks?_sort=title&_order=asc`).then(
-        (response) => response.json().then((data) => setData(data))
-      )
-    } else {
-      fetch(`http://localhost:3004/tasks`).then((response) =>
-        response.json().then((data) => setData(data))
-      )
-    }
+    remove(removeDbRef)
   }
 
   return (
     <div>
-      <input
-        placeholder="Поиск задачи"
-        value={searchQuery}
-        onChange={handleSearchQuery}
-      />
-      {!sortTask ? (
-        <button className="sortTask" onClick={taskSort}>
-          Сортировка по алфавиту
-        </button>
-      ) : (
-        <button className="numberSortTask" onClick={taskSort}>
-          Сортировка по порядку
-        </button>
-      )}
       <h1>Список задач</h1>
+      {keys.length > 0 ? <></> : <p>Задач нет</p>}
       <ul>
-        {data.length > 0 ? (
-          <div>
-            {data.map((post, id) => (
-              <PostItem
-                key={id}
-                {...post}
-                removeTask={removeTask}
-                updateTask={updateTask}
-                updateChecked={updateChecked}
-              />
-            ))}
-          </div>
-        ) : (
-          'Задач нет'
-        )}
+        <div>
+          {Object.entries(data).map(([key, { ...task }]) => (
+            <PostItem
+              key={key}
+              {...task}
+              updateTask={updateTask}
+              removeTask={removeTask}
+              updateChecked={updateChecked}
+              id={key}
+            />
+          ))}
+        </div>
       </ul>
       <form>
         <input
@@ -133,7 +76,7 @@ function App() {
           autoFocus={true}
           placeholder="Название задачи"
           value={task.title}
-          onChange={(e) => setTask({ ...task, title: e.target.value })}
+          onChange={(e) => setTask({ title: e.target.value, completed: false })}
         />
         <button
           type="submit"
